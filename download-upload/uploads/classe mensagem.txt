@@ -1,0 +1,116 @@
+//classe mensagem
+
+
+import javax.persistence.*;
+
+@Entity
+public class Message {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String sender;
+    private String recipient;
+    private String content;
+
+    // Getters e Setters
+}
+
+//repositor
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface MessageRepository extends JpaRepository<Message, Long> {
+    // Métodos adicionais, se necessário
+}
+
+//service
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+
+@Service
+public class WhatsAppService {
+
+    @Value("${whatsapp.api.url}")
+    private String whatsappApiUrl;
+
+    @Value("${whatsapp.token}")
+    private String token;
+
+    private final MessageRepository messageRepository;
+
+    public WhatsAppService(MessageRepository messageRepository) {
+        this.messageRepository = messageRepository;
+    }
+
+    public void sendMessage(String recipient, String content) {
+        // Crie o payload da requisição
+        String payload = String.format("{\"messaging_product\": \"whatsapp\", \"to\": \"%s\", \"text\": {\"body\": \"%s\"}}", recipient, content);
+
+        // Configurações da requisição
+        RestTemplate restTemplate = new RestTemplate();
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("Authorization", "Bearer " + token);
+
+        HttpEntity<String> requestEntity = new HttpEntity<>(payload, headers);
+
+        // Envia a mensagem
+        restTemplate.postForObject(whatsappApiUrl, requestEntity, String.class);
+
+        // Salva a mensagem no banco
+        Message message = new Message();
+        message.setSender("Seu número");
+        message.setRecipient(recipient);
+        message.setContent(content);
+        messageRepository.save(message);
+    }
+}
+
+
+//controller
+
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/messages")
+public class MessageController {
+
+    private final WhatsAppService whatsAppService;
+
+    public MessageController(WhatsAppService whatsAppService) {
+        this.whatsAppService = whatsAppService;
+    }
+
+    @PostMapping
+    public void sendMessage(@RequestParam String recipient, @RequestParam String content) {
+        whatsAppService.sendMessage(recipient, content);
+    }
+}
+
+
+6. Configuração do Webhook (Opcional)
+Se você deseja receber mensagens, configure um endpoint que o WhatsApp chamará quando uma nova mensagem chegar.
+
+@PostMapping("/webhook")
+public void webhook(@RequestBody String payload) {
+    // Processar a mensagem recebida
+    // Você pode salvar a mensagem no banco, enviar uma resposta, etc.
+}
+
+7. Configuração do application.properties
+Adicione as configurações da API do WhatsApp:
+
+whatsapp.api.url=https://graph.facebook.com/v12.0/YOUR_PHONE_NUMBER_ID/messages
+whatsapp.token=YOUR_ACCESS_TOKEN
+
+
+8. Testando a Aplicação
+Inicie sua aplicação Spring Boot.
+Use uma ferramenta como Postman para testar o endpoint /api/messages:
+
+
+POST http://localhost:8080/api/messages?recipient=NUMERO_DESTINO&content=Sua mensagem
+
